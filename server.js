@@ -19,6 +19,10 @@ app.use(express.static("public"));
 // Objekt som sparar alla spelare
 let players = {};
 
+// Alla enemies på servern
+let enemies = [];
+let serverShootingEnemies = [];
+
 // Matchens tid
 let gameTime = 60;
 
@@ -63,6 +67,60 @@ setInterval(() => {
     }
 
 }, 1000);
+
+// Spawnar enemies på servern
+setInterval(() => {
+
+    enemies.push({
+
+        id: Date.now(),
+
+        posX: Math.random() * 1000,
+        posY: -200,
+
+        speed: 2 + Math.random() * 2,
+
+        scale: 0.4,
+
+        state: "enemy",
+
+        alive: true,
+
+        height: 192,
+        width: 150
+    });
+
+    // Skickar enemies till alla
+    io.emit("enemies", enemies);
+
+}, 2000);
+
+// Spawnar shooting enemies
+setInterval(() => {
+
+    serverShootingEnemies.push({
+
+        id: Date.now(),
+
+        posX: Math.random() * 1000,
+        posY: -200,
+
+        speed: 1 + Math.random() * 2,
+
+        scale: 0.4,
+
+        state: "enemy",
+
+        alive: true,
+
+        height: 192,
+        width: 150
+    });
+
+    // Skickar shooting enemies till alla
+    io.emit("shootingEnemies", serverShootingEnemies);
+
+}, 5000);
 
 // När någon ansluter
 io.on("connection", (socket) => {

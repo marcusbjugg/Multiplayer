@@ -4,6 +4,11 @@ const socket = io();
 // Sparar andra spelare
 let otherPlayers = {};
 
+// Enemies från servern
+let serverEnemies = [];
+
+let serverShootingEnemies = [];
+
 // Mitt socket-id
 let myId = null;
 
@@ -30,6 +35,17 @@ socket.on("players", (serverPlayers) => {
         pointDisplay.innerHTML = `Points: ${myPoints}`;
     }
 
+});
+
+// Tar emot enemies från servern
+socket.on("enemies", (enemies) => {
+
+    serverEnemies = enemies;
+});
+
+socket.on("shootingEnemies", (enemies) => {
+
+    serverShootingEnemies = enemies;
 });
 
 socket.on("gameOver", (data) => {
@@ -85,12 +101,6 @@ let spaceship = {
     alive: true
 };
 
-//array för motståndarskepp som finns på spelplanen
-let enemies = [];
-
-//array för motståndarskepp som skjuter som finns på spelplanen
-let shootingEnemies = [];
-
 //Objekt för olika "states". Alltså olika tillstånd som en "entitet" kan befinna sig i
 const State = {
     states: {},
@@ -127,8 +137,6 @@ function tryStartGame() {
     imagesLoaded++;
     if (imagesLoaded === 5) {
         requestAnimationFrame(update);
-        setInterval(spawnEnemy, 2000);
-        setInterval(spawnShootingEnemy, 5000);
     }
 }
 
@@ -188,37 +196,6 @@ idleEnemyImage.onload = () => {
 bulletImage.onload = () => {
     tryStartGame();
 };
-
-//Laddar in motståndare som inte skuter på planen
-function spawnEnemy() {
-    const posX = Math.random() * (canvas.width - 150);
-    enemies.push({
-        posX,
-        posY: -200,
-        speed: 2 + Math.random() * 2,
-        scale: 0.4,
-        state: "enemy",
-        alive: true,
-        height: 192,
-        width: 150,
-    });
-}
-
-//Laddar in motståndare som skjuter på planen
-function spawnShootingEnemy() {
-    const posX = Math.random() * (canvas.width - 150);
-    shootingEnemies.push({
-        posX,
-        posY: -200,
-        speed: 1 + Math.random() * 2,
-        scale: 0.4,
-        state: "enemy",
-        alive: true,
-        height: 192,
-        width: 150,
-    });
-}
-
 
 //Funktion för att animera "entiteter"
 function animate(state, entity) {
@@ -327,7 +304,7 @@ function clearCanvas() {
 function checkBulletCollisions() {
     for (let i = bullets.length - 1; i >= 0; i--) {
         const bullet = bullets[i];
-        for (let enemy of enemies) {
+        for (let enemy of serverEnemies) {
             if (
                 enemy.alive &&
                 bullet.x < enemy.posX + 150 * enemy.scale &&
@@ -343,7 +320,7 @@ function checkBulletCollisions() {
                 break;
             }
         }
-        for (let enemy of shootingEnemies) {
+        for (let enemy of serverShootingEnemies) {
             if (
                 enemy.alive &&
                 bullet.x < enemy.posX + 150 * enemy.scale &&
@@ -364,8 +341,8 @@ function checkBulletCollisions() {
 
 //Funktion för att kolla om spelaren kolliderar med ett motståndarskepp
 function checkPlayerEnemyCollisions() {
-    for (let i = enemies.length - 1; i >= 0; i--) {
-        const enemy = enemies[i]
+    for (let i = serverEnemies.length - 1; i >= 0; i--) {
+        const enemy = serverEnemies[i]
         if(
             spaceship.alive &&
             enemy.posX < spaceship.posX + (State.states["idle"].frameWidth - 10) * spaceship.scale &&
@@ -374,7 +351,7 @@ function checkPlayerEnemyCollisions() {
             enemy.posY + enemy.height * enemy.scale * 0.6> spaceship.posY
         ) {
             socket.emit("removePoints", 50);
-            enemies.splice(i,1) 
+            serverEnemies.splice(i,1) 
             break;
         }
     }
@@ -382,8 +359,8 @@ function checkPlayerEnemyCollisions() {
 
 //Funktion för att kolla om spelaren kolliderar med ett skepp som skjuter
 function checkPlayerShootingEnemyCollisions() {
-    for (let i = shootingEnemies.length - 1; i >= 0; i--) {
-        const enemy = shootingEnemies[i]
+    for (let i = serverShootingEnemies.length - 1; i >= 0; i--) {
+        const enemy = serverShootingEnemies[i]
         if(
             spaceship.alive &&
             enemy.posX < spaceship.posX + (State.states["idle"].frameWidth - 10) * spaceship.scale &&
@@ -392,7 +369,7 @@ function checkPlayerShootingEnemyCollisions() {
             enemy.posY + enemy.height * enemy.scale * 0.6> spaceship.posY
         ) {
             socket.emit("removePoints", 50);
-            shootingEnemies.splice(i,1)
+            serverShootingEnemies.splice(i,1)
             break;
         }
     }
@@ -412,26 +389,6 @@ function checkPlayerBulletCollisions() {
             socket.emit("removePoints", 50);
             enemyBullets.splice(i,1)
             break;
-        }
-    }
-}
-
-//Uppdaterar motståndarskeppens position, tar bort dem om utanför skärm.
-function updateEnemies() {
-    for (let enemy of enemies) {
-        if (enemy.alive) {
-            enemy.posY += enemy.speed;
-            if (enemy.posY > canvas.height) {
-                enemy.alive = false;
-            }
-        }
-    }
-    for (let enemy of shootingEnemies) {
-        if (enemy.alive) {
-            enemy.posY += enemy.speed;
-            if (enemy.posY > canvas.height) {
-                enemy.alive = false;
-            }
         }
     }
 }
@@ -465,7 +422,7 @@ function update(timestamp) {
     }
 
     //Får motståndarskeppen att ha en chans av 1 av 100 varje frame att skjuta. Alltså begränsar hur ofta motståndarskeppen skjuter.
-    for (let enemy of shootingEnemies) {
+    for (let enemy of serverShootingEnemies) {
         if (enemy.alive) {
             if(Math.random() < 0.01) {
                 shootEnemyBullet(enemy);
@@ -504,7 +461,6 @@ function update(timestamp) {
     checkPlayerEnemyCollisions();
     checkBulletCollisions();
     checkPlayerBulletCollisions();
-    updateEnemies();
     clearCanvas();
     animate(State.getState(spaceship.state), spaceship);
     // Loopar igenom alla spelare
@@ -533,10 +489,12 @@ function update(timestamp) {
                 );
             }
         }
-    for (let enemy of enemies) {
-        animate(State.getState(enemy.state), enemy);
+
+    for (let enemy of serverEnemies) {
+    animate(State.getState(enemy.state), enemy);
     }
-    for (let enemy of shootingEnemies) {
+
+    for (let enemy of serverShootingEnemies) {
         animate(State.getState(enemy.state), enemy);
     }
     updateBullets();
