@@ -31,15 +31,6 @@ body {
     z-index: 1000;
 }
 
-#hp {
-    position: absolute;
-    top: 15px;
-    left: 18vw;
-    color: white;
-    font-size: 35px;
-    z-index: 1000;
-}
-
 #magazine {
     position: absolute;
     top: 15px;
@@ -48,3 +39,15 @@ body {
     font-size: 35px;
     z-index: 1000;
 }   
+
+#timer {
+
+    position: absolute;
+    top: 15px;
+    left: 75vw;
+
+    color: white;
+    font-size: 35px;
+
+    z-index: 1000;
+}

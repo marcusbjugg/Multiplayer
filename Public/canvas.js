@@ -21,8 +21,29 @@ socket.on("connect", () => {
 socket.on("players", (serverPlayers) => {
 
     otherPlayers = serverPlayers;
+
+    // Uppdaterar mina poäng från servern
+    if (otherPlayers[myId]) {
+
+        myPoints = otherPlayers[myId].points;
+
+        pointDisplay.innerHTML = `Points: ${myPoints}`;
+    }
+
 });
 
+socket.on("gameOver", (data) => {
+
+    alert(`
+
+Game Over!
+
+Winner: ${data.winner}
+
+    `);
+
+    location.reload();
+});
 
 // Om servern är full
 socket.on("full", () => {
@@ -30,23 +51,27 @@ socket.on("full", () => {
     alert("Servern är full!");
 });
 
+let timerDisplay = document.getElementById("timer");
+
+socket.on("timer", (time) => {
+
+    timerDisplay.innerHTML = `Time: ${time}`;
+});
+
 let canvas = document.getElementById("canvas");
 canvas.width = window.innerWidth - 18;
 canvas.height = window.innerHeight - 20;
 
-let gameContinueAlive = true  
-let gameContinueEmpty = true
+
+let myPoints = 0;
 let context = canvas.getContext("2d");
 let bullets = [];
 let enemyBullets = [];
 let canShoot = true;
 let keys = {};
 let count = 0;
-let points = 0;
-let hp = 5;
 let magazine = 10;
 let magazineDisplay = document.getElementById("magazine");
-let hpDisplay = document.getElementById("hp");
 let pointDisplay = document.getElementById("points");
 
 //skapar spelaren
@@ -194,19 +219,6 @@ function spawnShootingEnemy() {
     });
 }
 
-//Kollar om spelaren fortfarande lever
-function checkPlayerAlive() {
-    if(hp < 1) {
-        gameContinueAlive = false
-    }
-}
-
-//Kollar om spelaren fortfarande har skott kvar
-function checkBulletsLeft() {
-    if(magazine < 1) {
-        gameContinueEmpty = false
-    }
-}
 
 //Funktion för att animera "entiteter"
 function animate(state, entity) {
@@ -325,10 +337,9 @@ function checkBulletCollisions() {
             ) {
                 enemy.alive = false;
                 bullets.splice(i, 1);
-                points += 50;
+                socket.emit("addPoints", 50);
                 magazine = magazine + 1
                 magazineDisplay.innerHTML = `Bullets: ${magazine}`;
-                pointDisplay.innerHTML = `Points: ${points}`;
                 break;
             }
         }
@@ -342,10 +353,9 @@ function checkBulletCollisions() {
             ) {
                 enemy.alive = false;
                 bullets.splice(i, 1);
-                points += 100;
+                socket.emit("addPoints", 100);
                 magazine = magazine + 2
                 magazineDisplay.innerHTML = `Bullets: ${magazine}`;
-                pointDisplay.innerHTML = `Points: ${points}`;
                 break;
             }
         }
@@ -363,9 +373,8 @@ function checkPlayerEnemyCollisions() {
             enemy.posY < spaceship.posY + State.states["idle"].frameHeight * spaceship.scale &&
             enemy.posY + enemy.height * enemy.scale * 0.6> spaceship.posY
         ) {
-            hp = hp - 1;
-            hpDisplay.innerHTML = `HP: ${hp}`;
-            enemies.splice(i,1)
+            socket.emit("removePoints", 50);
+            enemies.splice(i,1) 
             break;
         }
     }
@@ -382,8 +391,7 @@ function checkPlayerShootingEnemyCollisions() {
             enemy.posY < spaceship.posY + State.states["idle"].frameHeight * spaceship.scale &&
             enemy.posY + enemy.height * enemy.scale * 0.6> spaceship.posY
         ) {
-            hp = hp - 1;
-            hpDisplay.innerHTML = `HP: ${hp}`;
+            socket.emit("removePoints", 50);
             shootingEnemies.splice(i,1)
             break;
         }
@@ -401,22 +409,19 @@ function checkPlayerBulletCollisions() {
             bullet.y < spaceship.posY + State.states["idle"].frameHeight * 0.6 * spaceship.scale &&
             bullet.y + bullet.height > spaceship.posY
         ) {
-            hp = hp - 1;
-            hpDisplay.innerHTML = `HP: ${hp}`;
+            socket.emit("removePoints", 50);
             enemyBullets.splice(i,1)
             break;
         }
     }
 }
 
-//Uppdaterar motståndarskeppens position, tar bort dem om utanför skärm och isf tar bort hp. 
+//Uppdaterar motståndarskeppens position, tar bort dem om utanför skärm.
 function updateEnemies() {
     for (let enemy of enemies) {
         if (enemy.alive) {
             enemy.posY += enemy.speed;
             if (enemy.posY > canvas.height) {
-                hp = hp - 1
-                hpDisplay.innerHTML = `HP: ${hp}`;
                 enemy.alive = false;
             }
         }
@@ -425,8 +430,6 @@ function updateEnemies() {
         if (enemy.alive) {
             enemy.posY += enemy.speed;
             if (enemy.posY > canvas.height) {
-                hp = hp - 1
-                hpDisplay.innerHTML = `HP: ${hp}`;
                 enemy.alive = false;
             }
         }
@@ -454,17 +457,6 @@ document.addEventListener("keyup", function(event) {
 
 //Denna funktion "kör" spelet
 function update(timestamp) {
-    //Lever spelaren? Om inte avslutas spelet.
-    if(!gameContinueAlive) {
-        alert(`                                    Game Over! You died.\n                                        You got ${points} points!`);
-        return;
-    };
-
-    //Har spelaren kvar skott? Om inte avslutas spelet.
-    if(!gameContinueEmpty) {
-        alert(`                            Game Over! You ran out of bullets.\n                                           You got ${points} points!`);
-        return;       
-    }
 
     //Frame-limiter funktion
     if (timestamp - lastTimestamp < timestep) {
@@ -479,6 +471,11 @@ function update(timestamp) {
                 shootEnemyBullet(enemy);
             }
         }
+    }
+
+    //Kan inte skjuta om magazine är slut
+    if (magazine == 0) {
+        canShoot = false
     }
 
     //Rörelsekontroll
@@ -546,8 +543,6 @@ function update(timestamp) {
     updateEnemyBullets();
     drawBullets();
     drawEnemyBullets();
-    checkPlayerAlive();
-    checkBulletsLeft();
 
     lastTimestamp = timestamp;
     

@@ -19,6 +19,50 @@ app.use(express.static("public"));
 // Objekt som sparar alla spelare
 let players = {};
 
+// Matchens tid
+let gameTime = 60;
+
+let gameEnded = false;
+
+// Matchtimer
+setInterval(() => {
+
+    gameTime--;
+
+    io.emit("timer", gameTime);
+
+    // Match slut
+    if(gameTime <= 0 && !gameEnded) {
+
+        let winner = "Draw";
+
+        let playerIds = Object.keys(players);
+
+        if(playerIds.length >= 2) {
+
+            let p1 = players[playerIds[0]];
+            let p2 = players[playerIds[1]];
+
+            if(p1.points > p2.points) {
+
+                winner = "Player 1 won";
+
+            } else if(p2.points > p1.points) {
+
+                winner = "Player 2 won";
+            }
+        }
+
+        gameEnded = true;
+
+        io.emit("gameOver", {
+
+            players,
+            winner
+        });
+    }
+
+}, 1000);
 
 // När någon ansluter
 io.on("connection", (socket) => {
@@ -59,6 +103,31 @@ io.on("connection", (socket) => {
             // Skickar nya positioner till alla
             io.emit("players", players);
         }
+    });
+    
+
+    // När spelaren får poäng
+        socket.on("addPoints", (points) => {
+
+            // Lägger till poäng
+            players[socket.id].points += points;
+
+            // Skickar uppdaterade spelare
+            io.emit("players", players);
+        });
+        // Tar bort poäng
+
+    socket.on("removePoints", (points) => {
+
+        players[socket.id].points -= points;
+
+        // Förhindrar negativa poäng
+        if(players[socket.id].points < 0) {
+
+            players[socket.id].points = 0;
+        }
+
+        io.emit("players", players);
     });
 
 
