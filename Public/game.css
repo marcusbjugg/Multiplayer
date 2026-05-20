@@ -1,0 +1,50 @@
+body {
+    margin: 0;
+    overflow: hidden;
+}
+
+.wasd {
+    position: absolute;
+    z-index: 9999;
+    top: 20px;
+    right: 50px;
+    width: 180px;
+}
+
+.background {
+    background-image: url('redplanet.png');
+    background-repeat: no-repeat;
+    background-size: cover;
+}
+
+.bulletImage {
+    width: 100%;
+    height: auto;
+}
+
+#points {
+    position: absolute;
+    top: 15px;
+    left: 5vw;
+    color: white;
+    font-size: 35px;
+    z-index: 1000;
+}
+
+#hp {
+    position: absolute;
+    top: 15px;
+    left: 18vw;
+    color: white;
+    font-size: 35px;
+    z-index: 1000;
+}
+
+#magazine {
+    position: absolute;
+    top: 15px;
+    left: 50vw;
+    color: white;
+    font-size: 35px;
+    z-index: 1000;
+}   
