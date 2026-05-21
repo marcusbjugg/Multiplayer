@@ -241,13 +241,12 @@ function animate(state, entity) {
 
 //Funktion för att skjuta skott från spelaren
 function shootBullet() {
-    bullets.push({
+    socket.emit("shootBullet", {
+
         x: spaceship.posX + 36,
-        y: spaceship.posY + 65,
-        speed: 15,
-        width: 20,
-        height: 13
+        y: spaceship.posY + 65
     });
+
     shootSound.currentTime = 0;
     shootSound.play();
 }
@@ -266,12 +265,10 @@ function shootEnemyBullet(enemy) {
 }
 
 //Funktion för att uppdatera spelarens skottposition
-function updateBullets() {
-    for (let i = 0; i < bullets.length; i++) {
-        bullets[i].y -= bullets[i].speed;
-    }
-    bullets = bullets.filter(bullet => bullet.y > 0);
-}
+socket.on("bullets", (serverBullets) => {
+
+    bullets = serverBullets;
+});
 
 //Funktion för att uppdatera motståndarskeppens skottposition
 function updateEnemyBullets() {
@@ -300,45 +297,6 @@ function clearCanvas() {
     context.clearRect(0, 0, canvas.width, canvas.height);
 }
 
-//Kollar om skotten har träffat motståndarskeppen. Ger poäng. Ger extraskott
-function checkBulletCollisions() {
-    for (let i = bullets.length - 1; i >= 0; i--) {
-        const bullet = bullets[i];
-        for (let enemy of serverEnemies) {
-            if (
-                enemy.alive &&
-                bullet.x < enemy.posX + 150 * enemy.scale &&
-                bullet.x + bullet.width > enemy.posX &&
-                bullet.y < enemy.posY + 192 * enemy.scale &&
-                bullet.y + bullet.height > enemy.posY
-            ) {
-                enemy.alive = false;
-                bullets.splice(i, 1);
-                socket.emit("addPoints", 50);
-                magazine = magazine + 1
-                magazineDisplay.innerHTML = `Bullets: ${magazine}`;
-                break;
-            }
-        }
-        for (let enemy of serverShootingEnemies) {
-            if (
-                enemy.alive &&
-                bullet.x < enemy.posX + 150 * enemy.scale &&
-                bullet.x + bullet.width > enemy.posX &&
-                bullet.y < enemy.posY + 192 * enemy.scale &&
-                bullet.y + bullet.height > enemy.posY
-            ) {
-                enemy.alive = false;
-                bullets.splice(i, 1);
-                socket.emit("addPoints", 100);
-                magazine = magazine + 2
-                magazineDisplay.innerHTML = `Bullets: ${magazine}`;
-                break;
-            }
-        }
-    }
-}
-
 //Funktion för att kolla om spelaren kolliderar med ett motståndarskepp
 function checkPlayerEnemyCollisions() {
     for (let i = serverEnemies.length - 1; i >= 0; i--) {
@@ -350,8 +308,8 @@ function checkPlayerEnemyCollisions() {
             enemy.posY < spaceship.posY + State.states["idle"].frameHeight * spaceship.scale &&
             enemy.posY + enemy.height * enemy.scale * 0.6> spaceship.posY
         ) {
+            socket.emit("playerHitEnemy", enemy.id);
             socket.emit("removePoints", 50);
-            serverEnemies.splice(i,1) 
             break;
         }
     }
@@ -368,8 +326,8 @@ function checkPlayerShootingEnemyCollisions() {
             enemy.posY < spaceship.posY + State.states["idle"].frameHeight * spaceship.scale &&
             enemy.posY + enemy.height * enemy.scale * 0.6> spaceship.posY
         ) {
+            socket.emit("playerHitShootingEnemy", enemy.id);
             socket.emit("removePoints", 50);
-            serverShootingEnemies.splice(i,1)
             break;
         }
     }
@@ -459,9 +417,12 @@ function update(timestamp) {
     //funktioner som körs varje frame
     checkPlayerShootingEnemyCollisions();
     checkPlayerEnemyCollisions();
-    checkBulletCollisions();
     checkPlayerBulletCollisions();
+
     clearCanvas();
+
+    
+    
     animate(State.getState(spaceship.state), spaceship);
     // Loopar igenom alla spelare
         for (let id in otherPlayers) {
@@ -497,7 +458,6 @@ function update(timestamp) {
     for (let enemy of serverShootingEnemies) {
         animate(State.getState(enemy.state), enemy);
     }
-    updateBullets();
     updateEnemyBullets();
     drawBullets();
     drawEnemyBullets();

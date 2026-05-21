@@ -23,6 +23,9 @@ let players = {};
 let enemies = [];
 let serverShootingEnemies = [];
 
+//array för skott
+let bullets = [];
+
 // Matchens tid
 let gameTime = 60;
 
@@ -122,8 +125,138 @@ setInterval(() => {
 
 }, 5000);
 
+//uppdaterar bullets
+setInterval(() => {
+
+    for (let bullet of bullets) {
+
+        bullet.y -= bullet.speed;
+    }
+
+    bullets = bullets.filter(bullet => bullet.y > -50);
+
+    for (let bullet of bullets) {
+
+    //Avgör träffar på motståndare
+    for (let enemy of enemies) {
+
+            if (
+
+                enemy.alive &&
+
+                bullet.x < enemy.posX + 150 * enemy.scale &&
+                bullet.x + bullet.width > enemy.posX &&
+
+                bullet.y < enemy.posY + 192 * enemy.scale &&
+                bullet.y + bullet.height > enemy.posY
+            ) {
+                // Ta bort enemy
+                enemies = enemies.filter(e => e.id !== enemy.id);
+
+                // Ta bort bullet
+                bullets = bullets.filter(b => b !== bullet);
+
+                // Ge poäng
+                if (players[bullet.owner]) {
+
+                    players[bullet.owner].points += 50;
+                }
+
+                // Uppdatera alla spelare
+                io.emit("players", players);
+            }
+        }
+    
+    for (let enemy of serverShootingEnemies) {
+
+            if (
+
+                enemy.alive &&
+
+                bullet.x < enemy.posX + 150 * enemy.scale &&
+                bullet.x + bullet.width > enemy.posX &&
+
+                bullet.y < enemy.posY + 192 * enemy.scale &&
+                bullet.y + bullet.height > enemy.posY
+            ) {
+
+                serverShootingEnemies =
+                    serverShootingEnemies.filter(
+                        e => e.id !== enemy.id
+                    );
+
+                bullets = bullets.filter(b => b !== bullet);
+
+                if (players[bullet.owner]) {
+
+                    players[bullet.owner].points += 100;
+                }
+
+                io.emit("players", players);
+            }
+        }
+    }
+
+    io.emit("bullets", bullets);
+
+    io.emit("enemies", enemies);
+
+    io.emit("shootingEnemies", serverShootingEnemies);
+
+}, 1000 / 60);
+
+// Uppdaterar enemies
+setInterval(() => {
+
+    for (let enemy of enemies) {
+
+        if (enemy.alive) {
+
+            enemy.posY += enemy.speed;
+        }
+    }
+
+    for (let enemy of serverShootingEnemies) {
+
+        if (enemy.alive) {
+
+            enemy.posY += enemy.speed;
+        }
+    }
+
+    // Tar bort enemies utanför skärmen
+    enemies = enemies.filter(enemy => enemy.posY < 1200);
+
+    serverShootingEnemies = serverShootingEnemies.filter(
+        enemy => enemy.posY < 1200
+
+    );
+
+    // Skickar uppdaterade enemies
+    io.emit("enemies", enemies);
+
+    io.emit("shootingEnemies", serverShootingEnemies);
+
+}, 1000 / 60);
+
+
 // När någon ansluter
 io.on("connection", (socket) => {
+
+    socket.on("shootBullet", (data) => {
+
+    bullets.push({
+            x: data.x,
+            y: data.y,
+
+            speed: 15,
+
+            width: 20,
+            height: 13,
+
+            owner: socket.id
+        });
+    });
 
     console.log("Ny spelare:", socket.id);
 
@@ -163,6 +296,27 @@ io.on("connection", (socket) => {
         }
     });
     
+    socket.on("playerHitEnemy", (enemyId) => {
+
+        enemies = enemies.filter(
+            enemy => enemy.id !== enemyId
+        );
+
+        io.emit("enemies", enemies);
+    });
+
+    socket.on("playerHitShootingEnemy", (enemyId) => {
+
+        serverShootingEnemies =
+            serverShootingEnemies.filter(
+                enemy => enemy.id !== enemyId
+            );
+
+        io.emit(
+            "shootingEnemies",
+            serverShootingEnemies
+        );
+    });
 
     // När spelaren får poäng
         socket.on("addPoints", (points) => {
