@@ -26,20 +26,56 @@ let serverShootingEnemies = [];
 //array för skott
 let bullets = [];
 
+//array för motståndarskott
+let enemyBullets = []
+
 // Matchens tid
 let gameTime = 60;
 
 let gameEnded = false;
+//Startar om spelet
+function resetGame() {
+
+    enemies = [];
+    serverShootingEnemies = [];
+
+    bullets = [];
+    enemyBullets = [];
+
+    gameTime = 60;
+    gameEnded = false;
+
+    // Reset spelare
+    for (let id in players) {
+
+        players[id].points = 0;
+        players[id].magazine = 10;
+
+        players[id].x = 500;
+        players[id].y = 300;
+    }
+
+    io.emit("players", players);
+
+    io.emit("enemies", enemies);
+
+    io.emit("shootingEnemies", serverShootingEnemies);
+
+    io.emit("bullets", bullets);
+
+    io.emit("enemyBullets", enemyBullets);
+}
 
 // Matchtimer
 setInterval(() => {
+
+    if (gameEnded) return;
 
     gameTime--;
 
     io.emit("timer", gameTime);
 
-    // Match slut
-    if(gameTime <= 0 && !gameEnded) {
+    if(gameTime <= 0) {
 
         let winner = "Draw";
 
@@ -67,6 +103,12 @@ setInterval(() => {
             players,
             winner
         });
+
+        setTimeout(() => {
+
+            resetGame();
+
+        }, 5000);
     }
 
 }, 1000);
@@ -86,8 +128,6 @@ setInterval(() => {
         scale: 0.4,
 
         state: "enemy",
-
-        alive: true,
 
         height: 192,
         width: 150
@@ -114,8 +154,6 @@ setInterval(() => {
 
         state: "enemy",
 
-        alive: true,
-
         height: 192,
         width: 150
     });
@@ -124,6 +162,45 @@ setInterval(() => {
     io.emit("shootingEnemies", serverShootingEnemies);
 
 }, 5000);
+
+//Skott för motståndare
+setInterval(() => {
+
+    for (let enemy of serverShootingEnemies) {
+        if (Math.random() < 0.01) {
+
+            enemyBullets.push({
+
+                id: Date.now() + Math.random(),
+
+                x: enemy.posX + 13,
+                y: enemy.posY + 65,
+
+                speed: 7,
+
+                width: 20,
+                height: 13
+            });
+        }
+    }
+
+}, 1000 / 60);
+
+//uppdaterar enemy bullets
+setInterval(() => {
+
+    for (let bullet of enemyBullets) {
+
+        bullet.y += bullet.speed;
+    }
+
+    enemyBullets = enemyBullets.filter(
+        bullet => bullet.y < 1200
+    );
+
+    io.emit("enemyBullets", enemyBullets);
+
+}, 1000 / 60);
 
 //uppdaterar bullets
 setInterval(() => {
@@ -141,9 +218,6 @@ setInterval(() => {
     for (let enemy of enemies) {
 
             if (
-
-                enemy.alive &&
-
                 bullet.x < enemy.posX + 150 * enemy.scale &&
                 bullet.x + bullet.width > enemy.posX &&
 
@@ -157,9 +231,9 @@ setInterval(() => {
                 bullets = bullets.filter(b => b !== bullet);
 
                 // Ge poäng
-                if (players[bullet.owner]) {
-
+                if (players[bullet.owner]) {                    
                     players[bullet.owner].points += 50;
+                    players[bullet.owner].magazine += 1;
                 }
 
                 // Uppdatera alla spelare
@@ -170,9 +244,6 @@ setInterval(() => {
     for (let enemy of serverShootingEnemies) {
 
             if (
-
-                enemy.alive &&
-
                 bullet.x < enemy.posX + 150 * enemy.scale &&
                 bullet.x + bullet.width > enemy.posX &&
 
@@ -188,8 +259,8 @@ setInterval(() => {
                 bullets = bullets.filter(b => b !== bullet);
 
                 if (players[bullet.owner]) {
-
                     players[bullet.owner].points += 100;
+                    players[bullet.owner].magazine += 2;
                 }
 
                 io.emit("players", players);
@@ -210,18 +281,12 @@ setInterval(() => {
 
     for (let enemy of enemies) {
 
-        if (enemy.alive) {
-
-            enemy.posY += enemy.speed;
-        }
+        enemy.posY += enemy.speed;
     }
 
     for (let enemy of serverShootingEnemies) {
 
-        if (enemy.alive) {
-
-            enemy.posY += enemy.speed;
-        }
+        enemy.posY += enemy.speed;
     }
 
     // Tar bort enemies utanför skärmen
@@ -244,8 +309,16 @@ setInterval(() => {
 io.on("connection", (socket) => {
 
     socket.on("shootBullet", (data) => {
+        if (!players[socket.id]) return;
 
-    bullets.push({
+        if (players[socket.id].magazine <= 0) {
+
+            return;
+        }
+        
+        players[socket.id].magazine--;
+
+        bullets.push({
             x: data.x,
             y: data.y,
 
@@ -274,7 +347,8 @@ io.on("connection", (socket) => {
 
         x: 500,
         y: 300,
-        points: 0
+        points: 0,
+        magazine: 10
     };
 
     // Skickar alla spelare till alla klienter
@@ -318,17 +392,16 @@ io.on("connection", (socket) => {
         );
     });
 
-    // När spelaren får poäng
-        socket.on("addPoints", (points) => {
+    socket.on("removeEnemyBullet", (bulletId) => {
 
-            // Lägger till poäng
-            players[socket.id].points += points;
+        enemyBullets = enemyBullets.filter(
+            bullet => bullet.id !== bulletId
+        );
 
-            // Skickar uppdaterade spelare
-            io.emit("players", players);
-        });
-        // Tar bort poäng
+        io.emit("enemyBullets", enemyBullets);
+    });
 
+    // Tar bort poäng
     socket.on("removePoints", (points) => {
 
         players[socket.id].points -= points;

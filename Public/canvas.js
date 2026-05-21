@@ -27,11 +27,13 @@ socket.on("players", (serverPlayers) => {
 
     otherPlayers = serverPlayers;
 
-    // Uppdaterar mina poäng från servern
+    // Uppdaterar mina poäng och mitt magasin från servern
     if (otherPlayers[myId]) {
 
         myPoints = otherPlayers[myId].points;
+        magazine = otherPlayers[myId].magazine;
 
+        magazineDisplay.innerHTML = `Bullets: ${magazine}`;
         pointDisplay.innerHTML = `Points: ${myPoints}`;
     }
 
@@ -57,8 +59,6 @@ Game Over!
 Winner: ${data.winner}
 
     `);
-
-    location.reload();
 });
 
 // Om servern är full
@@ -86,7 +86,6 @@ let enemyBullets = [];
 let canShoot = true;
 let keys = {};
 let count = 0;
-let magazine = 10;
 let magazineDisplay = document.getElementById("magazine");
 let pointDisplay = document.getElementById("points");
 
@@ -199,7 +198,7 @@ bulletImage.onload = () => {
 
 //Funktion för att animera "entiteter"
 function animate(state, entity) {
-    if (!state || !state.spritesheet.complete || !entity.alive) return;
+    if (!state || !state.spritesheet.complete) return;
 
     const frameWidth = state.frameWidth;
     const frameHeight = state.frameHeight;
@@ -251,32 +250,18 @@ function shootBullet() {
     shootSound.play();
 }
 
-//Funktion för att skjuta skott från motståndarspelare
-function shootEnemyBullet(enemy) {
-    enemyBullets.push({
-        x: enemy.posX + 13,
-        y: enemy.posY + 65,
-        speed: 7    ,
-        width: 20,
-        height: 13
-    });
-    shootSound.currentTime = 0;
-    shootSound.play();
-}
-
 //Funktion för att uppdatera spelarens skottposition
 socket.on("bullets", (serverBullets) => {
 
     bullets = serverBullets;
 });
 
-//Funktion för att uppdatera motståndarskeppens skottposition
-function updateEnemyBullets() {
-    for (let i = 0; i < enemyBullets.length; i++) {
-        enemyBullets[i].y += enemyBullets[i].speed;
-    }
-    enemyBullets = enemyBullets.filter(bullet => bullet.y < canvas.height);
-}
+//Funktion för att uppdatera motståndarens skottposition
+socket.on("enemyBullets", (serverEnemyBullets) => {
+
+    enemyBullets = serverEnemyBullets;
+});
+
 
 //Funktion för att rita spelarens skott på plan
 function drawBullets() {
@@ -345,7 +330,7 @@ function checkPlayerBulletCollisions() {
             bullet.y + bullet.height > spaceship.posY
         ) {
             socket.emit("removePoints", 50);
-            enemyBullets.splice(i,1)
+            socket.emit("removeEnemyBullet", bullet.id);
             break;
         }
     }
@@ -357,9 +342,6 @@ document.addEventListener("keydown", function(event) {
         keys[event.key] = true;
         if (event.key === " " && canShoot) {
             shootBullet();
-            magazine--
-            magazineDisplay.innerHTML = `Bullets: ${magazine}`
-            canShoot = false;
         }
     }
 });
@@ -377,20 +359,6 @@ function update(timestamp) {
     if (timestamp - lastTimestamp < timestep) {
         requestAnimationFrame(update);
         return;
-    }
-
-    //Får motståndarskeppen att ha en chans av 1 av 100 varje frame att skjuta. Alltså begränsar hur ofta motståndarskeppen skjuter.
-    for (let enemy of serverShootingEnemies) {
-        if (enemy.alive) {
-            if(Math.random() < 0.01) {
-                shootEnemyBullet(enemy);
-            }
-        }
-    }
-
-    //Kan inte skjuta om magazine är slut
-    if (magazine == 0) {
-        canShoot = false
     }
 
     //Rörelsekontroll
@@ -458,7 +426,6 @@ function update(timestamp) {
     for (let enemy of serverShootingEnemies) {
         animate(State.getState(enemy.state), enemy);
     }
-    updateEnemyBullets();
     drawBullets();
     drawEnemyBullets();
 
